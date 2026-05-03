@@ -1,0 +1,47 @@
+{
+  "name": "3dstreet-mcp",
+  "version": "0.1.0",
+  "description": "Model Context Protocol server for 3DStreet — drive an open 3DStreet tab from Claude Desktop or Claude Code.",
+  "type": "module",
+  "main": "src/relay.js",
+  "exports": {
+    ".": "./src/relay.js"
+  },
+  "bin": {
+    "3dstreet-mcp": "src/cli.js"
+  },
+  "files": [
+    "src/",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "start": "node src/cli.js",
+    "test": "node --test test/*.test.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "AGPL-3.0-or-later",
+  "author": "3DStreet contributors",
+  "homepage": "https://github.com/3DStreet/3dstreet-mcp",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/3DStreet/3dstreet-mcp.git"
+  },
+  "bugs": {
+    "url": "https://github.com/3DStreet/3dstreet/issues"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "3dstreet",
+    "claude",
+    "anthropic",
+    "aframe",
+    "urban-planning"
+  ],
+  "dependencies": {
+    "ws": "^8.20.0"
+  }
+}
