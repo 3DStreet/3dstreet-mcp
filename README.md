@@ -52,10 +52,21 @@ claude mcp add 3dstreet -- npx -y 3dstreet-mcp
 
 ### Pair the browser tab
 
-1. Open <https://3dstreet.app> and sign in.
-2. Open the editor and click the **AI Assistant** tab in the right panel.
-3. Type `/mcp` and hit enter — the status bar appears.
-4. Click **Reconnect** if it's not already green.
+On startup the relay prints an auto-pair URL to its log, like:
+
+```
+open this URL to pair a 3DStreet tab: https://3dstreet.app/#mcp
+```
+
+Open that URL in a signed-in browser and the editor will detect the
+`#mcp` fragment, open the **AI Assistant** pane, and pair with the
+relay automatically — no console commands needed. (If you ran the
+relay on a non-default port the URL will look like
+`https://3dstreet.app/#mcp=PORT`.)
+
+If you'd rather pair manually: open <https://3dstreet.app>, click
+**AI Assistant** in the right panel, type `/mcp`, and click
+**Reconnect**.
 
 You can now ask Claude things like:
 
@@ -73,13 +84,43 @@ Toggle **Read-only** in the status bar to block scene mutations
 
 Options:
   -p, --port <number>    WebSocket port (default 51735)
+  -o, --origin <url>     Origin used in the printed auto-pair URL and
+                         the MCP `instructions` hint (default
+                         https://3dstreet.app — set to
+                         http://localhost:3333 when running 3DStreet
+                         from a local dev server)
   -h, --help             Show this help
   -v, --version          Print version and exit
 ```
 
 If you need a different port (e.g. running two Claude clients against
-two different tabs), set `--port` and open the tab with
-`https://3dstreet.app/?mcp=PORT`.
+two different tabs), pass `--port` and open the auto-pair URL the
+relay prints — `https://3dstreet.app/#mcp=PORT` — which both selects
+the port and triggers auto-pair.
+
+For local 3DStreet development, point `--origin` at your dev server so
+the printed URL and the LLM's `instructions` hint both resolve to the
+right tab:
+
+```bash
+node src/cli.js --origin http://localhost:3333
+# → open this URL to pair a 3DStreet tab: http://localhost:3333/#mcp
+```
+
+## Telling the LLM how to pair
+
+The relay returns an `instructions` string on every `initialize` (an
+optional MCP field clients may fold into the LLM's system prompt). It
+explains that scene tools are forwarded to a paired tab, names the
+auto-pair URL, and tells the model to surface that URL to the user
+when no tab is connected — so the LLM proactively guides users
+through pairing instead of waiting for an opaque tool-call timeout.
+
+When no tab has *ever* paired this relay session, `tools/call` also
+fast-fails with the auto-pair URL in the error message, rather than
+queuing for 30 seconds. Once a tab has paired, brief disconnects
+revert to the queued retry behaviour so reconnecting peers can drain
+in-flight calls.
 
 ## Tools exposed
 

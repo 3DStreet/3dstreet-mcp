@@ -30,11 +30,43 @@ const DEFAULT_ALLOWED_ORIGINS = [
   'http://127.0.0.1:3333'
 ];
 
+const DEFAULT_PORT = 51735;
+const DEFAULT_PAIR_ORIGIN = 'https://3dstreet.app';
+
 const PAIRED_ELSEWHERE_CODE = 4001;
 // Grace period for tools/call frames that arrive before the browser tab
 // pairs. Long enough for the user to read Claude's "open the tab" message
 // and click Reconnect; short enough that a forgotten request times out.
 const PEER_WAIT_MS = 30_000;
+
+/**
+ * Build the auto-pair URL. The 3DStreet app reads `#mcp` from the URL
+ * fragment to open the AI Assistant pane and pair with the relay
+ * automatically — equivalent to typing `/mcp` in the console. A custom
+ * port is encoded as `#mcp=PORT`.
+ */
+export function buildPairUrl(port = DEFAULT_PORT, origin = DEFAULT_PAIR_ORIGIN) {
+  const fragment = port === DEFAULT_PORT ? 'mcp' : `mcp=${port}`;
+  return `${origin}/#${fragment}`;
+}
+
+/**
+ * Build the MCP `instructions` string returned on `initialize`. Clients
+ * may fold this into the LLM's system prompt — the goal is for the model
+ * to proactively tell the user how to pair when no tab is connected,
+ * rather than discovering it after a 30-second queue timeout.
+ */
+export function buildInstructions(pairUrl) {
+  return [
+    '3DStreet MCP relay. All scene tools are forwarded to a paired 3DStreet browser tab — without one, `tools/list` returns empty and any `tools/call` will fail with "No 3DStreet tab is paired" or "Timed out waiting for the 3DStreet tab".',
+    '',
+    'When that happens, instruct the user to open this URL in their browser to auto-pair the tab with this relay:',
+    '',
+    `    ${pairUrl}`,
+    '',
+    'Once the user confirms the tab paired (the AI Assistant pane in 3DStreet shows "MCP relay paired"), retry the tool call. The relay caches tool definitions across brief reconnects, so a once-paired user does not need re-instructing on transient drops.'
+  ].join('\n');
+}
 
 /**
  * @typedef {object} Transport
@@ -56,11 +88,14 @@ const PEER_WAIT_MS = 30_000;
  * @returns {{ attach: (t: Transport) => void, close: () => Promise<void>, port: number }}
  */
 export function createRelay({
-  port = 51735,
+  port = DEFAULT_PORT,
   allowedOrigins = DEFAULT_ALLOWED_ORIGINS,
+  pairOrigin = DEFAULT_PAIR_ORIGIN,
   log = (...args) => console.error('[3dstreet-mcp]', ...args)
 } = {}) {
   const allowed = new Set(allowedOrigins);
+  const pairUrl = buildPairUrl(port, pairOrigin);
+  const instructions = buildInstructions(pairUrl);
 
   /** @type {import('ws').WebSocket | null} */
   let peer = null;
@@ -71,6 +106,11 @@ export function createRelay({
   const callQueue = [];
   /** @type {object[]} cached tools list from peer; survives peer disconnects */
   let cachedTools = [];
+  // Distinguishes "user never opened a tab" from "tab was paired, briefly
+  // disconnected." The first case fast-fails tools/call so the user gets
+  // an immediate URL-bearing error; the second keeps the 30s queue so a
+  // reconnecting peer drains pending calls instead of erroring them out.
+  let hasEverConnectedPeer = false;
   /** @type {Transport | null} */
   let transport = null;
   let closing = false;
@@ -92,6 +132,7 @@ export function createRelay({
 
   wss.on('listening', () => {
     log(`listening on ws://127.0.0.1:${port}`);
+    log(`open this URL to pair a 3DStreet tab: ${pairUrl}`);
   });
 
   wss.on('error', (err) => {
@@ -105,6 +146,7 @@ export function createRelay({
       return;
     }
     peer = ws;
+    hasEverConnectedPeer = true;
     log(`paired with ${req.headers.origin || 'unknown origin'}`);
 
     refreshToolsFromPeer().then(() => {
@@ -246,7 +288,8 @@ export function createRelay({
         return reply({
           protocolVersion: PROTOCOL_VERSION,
           capabilities: { tools: { listChanged: true } },
-          serverInfo: SERVER_INFO
+          serverInfo: SERVER_INFO,
+          instructions
         });
 
       case 'notifications/initialized':
@@ -271,7 +314,18 @@ export function createRelay({
           return fail(-32602, 'tools/call requires params.name');
         }
         if (!peer || peer.readyState !== peer.OPEN) {
-          // Defer briefly so the user has time to open the tab.
+          if (!hasEverConnectedPeer) {
+            // Fast-fail: no tab has ever paired this session — there's
+            // no point queueing 30s, the user simply hasn't opened the
+            // URL yet. Surface the auto-pair URL immediately so the LLM
+            // can hand it to the user.
+            return fail(
+              -32000,
+              `No 3DStreet tab is paired. Open ${pairUrl} to auto-pair, then try again.`
+            );
+          }
+          // Tab was paired earlier and is presumably reconnecting. Defer
+          // briefly so the queue drains when the peer reattaches.
           callQueue.push(frame);
           setTimeout(() => {
             const idx = callQueue.indexOf(frame);
@@ -282,8 +336,7 @@ export function createRelay({
               id: frame.id,
               error: {
                 code: -32000,
-                message:
-                  'Timed out waiting for the 3DStreet tab. Open it, type /mcp in the AI Assistant pane, click Reconnect, then try again.'
+                message: `Timed out waiting for the 3DStreet tab. Open ${pairUrl} to auto-pair, then try again.`
               }
             });
           }, PEER_WAIT_MS);
@@ -347,7 +400,7 @@ export function createRelay({
     transport?.close();
   }
 
-  return { attach, close, port };
+  return { attach, close, port, pairUrl, instructions };
 }
 
 /**

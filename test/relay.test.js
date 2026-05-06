@@ -70,7 +70,7 @@ function silentLog() {
   // Swallow logs so test output stays readable.
 }
 
-test('initialize → protocolVersion + serverInfo', async () => {
+test('initialize → protocolVersion + serverInfo + instructions', async () => {
   const port = await getPort();
   const relay = createRelay({ port, log: silentLog });
   const mcp = makeMemTransport();
@@ -84,6 +84,68 @@ test('initialize → protocolVersion + serverInfo', async () => {
   assert.deepEqual(reply.result.capabilities, {
     tools: { listChanged: true }
   });
+  // The instructions hint must include the auto-pair URL so a client's
+  // LLM can hand it to the user when no tab is paired.
+  assert.equal(typeof reply.result.instructions, 'string');
+  assert.match(reply.result.instructions, /https:\/\/3dstreet\.app\/#mcp/);
+
+  await relay.close();
+});
+
+test('--origin override flows into pairUrl + instructions', async () => {
+  const port = await getPort();
+  const relay = createRelay({
+    port,
+    pairOrigin: 'http://localhost:3333',
+    log: silentLog
+  });
+  const mcp = makeMemTransport();
+  relay.attach(mcp.transport);
+
+  // Ephemeral port → URL carries `#mcp=PORT`. The bare `#mcp` form
+  // is exercised by the buildPairUrl unit cases, not here.
+  assert.equal(relay.pairUrl, `http://localhost:3333/#mcp=${port}`);
+
+  await mcp.sendFrame({ jsonrpc: '2.0', id: 1, method: 'initialize' });
+  const reply = await mcp.nextFrame();
+  assert.ok(
+    reply.result.instructions.includes(relay.pairUrl),
+    `instructions should mention the pair URL ${relay.pairUrl}`
+  );
+  assert.doesNotMatch(
+    reply.result.instructions,
+    /3dstreet\.app/,
+    'override should fully replace the default origin'
+  );
+
+  await relay.close();
+});
+
+test('tools/call before any peer ever connects fails fast with pair URL', async () => {
+  const port = await getPort();
+  const relay = createRelay({ port, log: silentLog });
+  const mcp = makeMemTransport();
+  relay.attach(mcp.transport);
+
+  const t0 = Date.now();
+  await mcp.sendFrame({
+    jsonrpc: '2.0',
+    id: 7,
+    method: 'tools/call',
+    params: { name: 'getScene', arguments: {} }
+  });
+  const reply = await mcp.nextFrame();
+  const elapsed = Date.now() - t0;
+
+  assert.equal(reply.id, 7);
+  assert.ok(reply.error, 'expected an error reply');
+  assert.match(reply.error.message, /No 3DStreet tab is paired/);
+  assert.match(reply.error.message, /https:\/\/3dstreet\.app\/#mcp/);
+  // Sanity: this came back fast — well below the 30s queue timeout.
+  assert.ok(
+    elapsed < 1000,
+    `expected fast-fail under 1s, took ${elapsed}ms`
+  );
 
   await relay.close();
 });

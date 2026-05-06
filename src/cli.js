@@ -23,6 +23,11 @@ Usage: 3dstreet-mcp [options]
 
 Options:
   -p, --port <number>    WebSocket port (default 51735)
+  -o, --origin <url>     Origin used for the printed auto-pair URL and
+                         the MCP \`instructions\` hint (default
+                         https://3dstreet.app — set to
+                         http://localhost:3333 when running 3DStreet
+                         from a local dev server)
   -h, --help             Show this help
   -v, --version          Print version and exit
 
@@ -34,14 +39,17 @@ Configure in Claude Desktop / Claude Code as an MCP server, e.g.
     }
   }
 
-Then open https://3dstreet.app in a browser, sign in, open the AI Assistant
-pane in the editor, and type /mcp to pair this tab with the relay.
+On startup the relay prints an auto-pair URL like
+https://3dstreet.app/#mcp — open it in a signed-in browser to pair the
+tab with the relay automatically. (Custom ports become #mcp=PORT.) The
+same URL is included in the MCP \`instructions\` field so any client's
+LLM can proactively guide the user when no tab is paired yet.
 
 For full design notes see https://github.com/3DStreet/3dstreet/issues/1582.
 `;
 
 function parseArgs(argv) {
-  const out = { port: 51735, help: false, version: false };
+  const out = { port: 51735, origin: undefined, help: false, version: false };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '-h' || a === '--help') {
@@ -56,6 +64,20 @@ function parseArgs(argv) {
         process.exit(2);
       }
       out.port = n;
+    } else if (a === '-o' || a === '--origin') {
+      const next = argv[++i];
+      try {
+        const u = new URL(next);
+        if (u.protocol !== 'http:' && u.protocol !== 'https:') {
+          throw new Error('protocol must be http or https');
+        }
+        // Use just origin (scheme + host + port) for the pair URL
+        // builder, dropping any path / query / hash the user supplied.
+        out.origin = u.origin;
+      } catch (err) {
+        console.error(`Invalid --origin value: ${next} (${err.message})`);
+        process.exit(2);
+      }
     } else {
       console.error(`Unknown argument: ${a}`);
       console.error(HELP);
@@ -78,7 +100,10 @@ async function main() {
     return;
   }
 
-  const relay = createRelay({ port: args.port });
+  const relay = createRelay({
+    port: args.port,
+    ...(args.origin ? { pairOrigin: args.origin } : {})
+  });
   relay.attach(createStdioTransport());
 
   const shutdown = async () => {
