@@ -3,9 +3,13 @@
 A [Model Context Protocol][mcp] server that lets [Claude Desktop][cd] or
 [Claude Code][cc] drive a [3DStreet][3ds] scene running in your browser.
 
+Listed on the [MCP Registry][registry] as `app.3dstreet/3dstreet`.
+
 Status: **alpha** — protocol may change. Tracks
 [3DStreet#1582][issue] (design) and
-[3DStreet#1600][pr] (browser side).
+[3DStreet#1600][pr] (browser side). Scene creation works in any
+3dstreet.app tab; saving and geospatial features require a free
+3DStreet account.
 
 ## How it works
 
@@ -181,3 +185,4 @@ AGPL-3.0-or-later, matching 3DStreet itself.
 [3ds]: https://3dstreet.app
 [issue]: https://github.com/3DStreet/3dstreet/issues/1582
 [pr]: https://github.com/3DStreet/3dstreet/pull/1600
+[registry]: https://registry.modelcontextprotocol.io/v0.1/servers?search=app.3dstreet/3dstreet
