@@ -31,6 +31,10 @@ Options:
   -h, --help             Show this help
   -v, --version          Print version and exit
 
+This relay is the fallback for MCP clients without WebMCP. Agents that run
+inside a browser should open https://3dstreet.app instead — the page
+registers the same tools via document.modelContext, nothing to install.
+
 Configure in Claude Desktop / Claude Code as an MCP server, e.g.
 
   {

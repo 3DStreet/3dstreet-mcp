@@ -1,7 +1,18 @@
 # 3dstreet-mcp
 
-A [Model Context Protocol][mcp] server that lets [Claude Desktop][cd] or
+A [Model Context Protocol][mcp] relay that lets [Claude Desktop][cd] or
 [Claude Code][cc] drive a [3DStreet][3ds] scene running in your browser.
+
+> **Is this the right tool?** This relay is the **fallback** for MCP clients
+> that cannot use WebMCP. If your agent runs *inside* a browser (ChatGPT's
+> desktop browser, Gemini in Chrome, Chrome 149+ with the WebMCP origin
+> trial or `chrome://flags/#enable-webmcp-testing`), you do not need this
+> package: open <https://3dstreet.app> and the page registers the same
+> tools with the browser via `document.modelContext` — nothing to install,
+> no pairing. See the [3DStreet WebMCP docs][webmcp]. Use this relay only
+> for clients with no browser of their own or no WebMCP support (Claude
+> Desktop, Claude Code, Cursor, headless scripts). It will be retired once
+> those clients read WebMCP natively.
 
 Listed on the [MCP Registry][registry] as `app.3dstreet/3dstreet`.
 
@@ -180,6 +191,7 @@ npx @modelcontextprotocol/inspector node src/cli.js
 AGPL-3.0-or-later, matching 3DStreet itself.
 
 [mcp]: https://modelcontextprotocol.io
+[webmcp]: https://github.com/3DStreet/3dstreet/blob/main/docs/webmcp.md
 [cd]: https://claude.ai/download
 [cc]: https://docs.claude.com/en/docs/claude-code
 [3ds]: https://3dstreet.app

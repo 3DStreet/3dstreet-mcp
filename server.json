@@ -1,7 +1,7 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "app.3dstreet/3dstreet",
-  "description": "Drive an open 3DStreet scene tab from Claude Desktop or Claude Code via MCP tool calls.",
+  "description": "Fallback MCP relay: drive an open 3DStreet scene tab from clients without WebMCP (Claude Desktop, Claude Code). Browser-embedded agents should use WebMCP at https://3dstreet.app instead.",
   "repository": {
     "url": "https://github.com/3DStreet/3dstreet-mcp",
     "source": "github"
